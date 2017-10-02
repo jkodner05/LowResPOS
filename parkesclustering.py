@@ -1856,8 +1856,8 @@ def load_matrices(datafile, seedsperPOS, seedwords, evalmap, distmap):
                 evalmap[tag] = tag
 
     if not seedwords:
-        POSes, seedwords = get_seedwordsunambig(mappedtags, seedsperPOS)
-#        POSes, seedwords = get_seedwords(mappedtags, seedsperPOS)
+        #POSes, seedwords = get_seedwordsunambig(mappedtags, seedsperPOS)
+        POSes, seedwords = get_seedwords(mappedtags, seedsperPOS)
         print "Num tags\t\t", len(POSes)
         print "Max possible seeds\t", len(seedwords)
         print "\n"
@@ -1865,9 +1865,37 @@ def load_matrices(datafile, seedsperPOS, seedwords, evalmap, distmap):
     return mappedtags, words_topk, bothdist, distmap, evalmap, seedwords
 
 
+def get_topk_indices(k, words, seedwords):
+
+    nonseedwords = set([word for word in words if word not in seedwords][0:k])
+    nonseedindices = [i for i, word in enumerate(words) if word in nonseedwords]
+    seedindices = [i for i, word in enumerate(words) if word in seedwords]
+
+
+    indices = nonseedindices
+    indices.extend(seedindices)
+
+    return indices
+
 def assign(mappedtags, words, k, distances, seedwords, evalmap, prevassignments, prevconfidences):
-    words_topk = words[0:k]
-    distances_topk = distance.squareform(distance.squareform(distances)[0:k,0:k])
+
+    topk_indices = get_topk_indices(k, words, seedwords)
+    indicesset = set(topk_indices)
+
+    words_topk = [word for i, word in enumerate(words) if i in indicesset]
+    distances_topk = distance.squareform(distance.squareform(distances)[:,topk_indices][topk_indices,:])
+
+    print topk_indices[0:5]
+    print distance.squareform(distances)[:,topk_indices[0:5]][topk_indices[0:5],:]
+
+    print distance.squareform(distances)[topk_indices[0],topk_indices[0]]
+    print distance.squareform(distances)[topk_indices[0],topk_indices[1]]
+    print distance.squareform(distances)[topk_indices[0],topk_indices[2]]
+    print distance.squareform(distances)[topk_indices[0],topk_indices[3]]
+    print distance.squareform(distances)[topk_indices[0],topk_indices[4]]
+
+#    words_topk = words[0:k]
+#    distances_topk = distance.squareform(distance.squareform(distances)[0:k,0:k])
 
     #methods = ['single','complete', 'weighted', 'average']
     methods = ['average']
@@ -1882,9 +1910,8 @@ def assign(mappedtags, words, k, distances, seedwords, evalmap, prevassignments,
         c, coph_dists = hierarchy.cophenet(bothtree, distances_topk)
         print "Cophenetic Correlation:", c
         evaluate_types(assignments, seedwords, mappedtags, evalmap)
-#        if k > 400:
-#            plot_dendrogram(bothtree, 'Right+Left Context Dendrogram', "both_dendrogram.png", words_topk, len(words_topk), seedwords)
-#            exit()
+        plot_dendrogram(bothtree, 'Right+Left Context Dendrogram', "both_dendrogram.png", words_topk, len(words_topk), seedwords)
+        exit()
 
         return assignments, confidences, update_seedwords(seedwords, assignments, confidences)
 
@@ -1965,6 +1992,7 @@ if __name__ == "__main__":
 #    elif args.inputdir and args.loadmats:
 #        exit("error4")
     elif args.corpus and args.corpus.lower() not in set(["wsj","brown", "conll", "lctl", "ctb", "turkishts"]):
+        print args.corpus
         exit("Invalid corpus type")
     elif args.numseedsperpos < 0 and args.loadmats:
         exit("error5")
@@ -2022,8 +2050,8 @@ if __name__ == "__main__":
 #        evaluate_tokens(args.inputdir, args.corpus, assignments, evalmap, distmap, outfile=args.datafile, seeds=originalseeds, ngram=True)
 
         print "\n\nBASELINES...\n"
-        POSes, originalseeds = get_seedwordsunambig(tags, args.numseedsperpos)
-#        POSes, originalseeds = get_seedwords(tags, args.numseedsperpos)
+#        POSes, originalseeds = get_seedwordsunambig(tags, args.numseedsperpos)
+        POSes, originalseeds = get_seedwords(tags, args.numseedsperpos)
         if args.numseedsperpos == 0:
             originalseeds = {seed:tags for seed, tags in carlsonseeds.iteritems() if seed in assignments}
         baselinetags = {word:{"UNK":1} for word in assignments}
