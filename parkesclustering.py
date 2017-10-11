@@ -26,6 +26,8 @@ import pycrfsuite
 START = "#START"
 STOP = "#STOP"
 
+SKIP_TAG = "SKIP"
+
 CONF_THRESHOLD = 0.0
 
 WSJ_FINDWORD = re.compile(r"\(([\w\d\.,\?!]+)\s([A-Za-z\d'-\.,\?!]+?)\)")
@@ -1285,6 +1287,10 @@ def get_seedwordsunambig(wordsbytagfreq, seedsperpos):
     POSes = set([])
     for word, tags in wordsbytagfreq.iteritems():
         POSes = POSes.union(set(tags.keys()))
+    try:
+        POSes.remove(SKIP_TAG)
+    except KeyError:
+        pass
     for POS in POSes:
         sortedwords = [word for word in sorted(wordsbytagfreq.iteritems(), key = lambda x: sortfunc(x,POS), reverse=True) if POS in word[1] and len(word[1]) == 1]
 #        print POS, len(sortedwords)
@@ -1315,6 +1321,10 @@ def get_seedwords(wordsbytagfreq, seedsperpos):
     POSes = set([])
     for word, tags in wordsbytagfreq.iteritems():
         POSes = POSes.union(set(tags.keys()))
+    try:
+        POSes.remove(SKIP_TAG)
+    except KeyError:
+        pass
     for POS in POSes:
         sortedwords = [word[0] for word in sorted(wordsbytagfreq.iteritems(), key = lambda x: sortfunc(x,POS), reverse=True)][0:seedsperpos]
         seedwords_byPOS[POS] = sortedwords
@@ -1856,8 +1866,8 @@ def load_matrices(datafile, seedsperPOS, seedwords, evalmap, distmap):
                 evalmap[tag] = tag
 
     if not seedwords:
-        POSes, seedwords = get_seedwordsunambig(mappedtags, seedsperPOS)
-#        POSes, seedwords = get_seedwords(mappedtags, seedsperPOS)
+#        POSes, seedwords = get_seedwordsunambig(mappedtags, seedsperPOS)
+        POSes, seedwords = get_seedwords(mappedtags, seedsperPOS)
         print "Num tags\t\t", len(POSes)
         print "Max possible seeds\t", len(seedwords)
         print "\n"
@@ -1996,6 +2006,8 @@ if __name__ == "__main__":
         assignments = {}
         confidences = {}
         incr = 10
+#        print tags, distances, originalseeds
+
         for k in args.numclustertypes.split(","):
 #        for k in np.arange(50,int(args.numclustertypes.split(",")[-1])+incr,incr):
             assignments, confidences, seeds = assign(tags, words, int(k), distances, seedwords, evalmap, assignments, confidences)
@@ -2022,8 +2034,8 @@ if __name__ == "__main__":
 #        evaluate_tokens(args.inputdir, args.corpus, assignments, evalmap, distmap, outfile=args.datafile, seeds=originalseeds, ngram=True)
 
         print "\n\nBASELINES...\n"
-        POSes, originalseeds = get_seedwordsunambig(tags, args.numseedsperpos)
-#        POSes, originalseeds = get_seedwords(tags, args.numseedsperpos)
+#        POSes, originalseeds = get_seedwordsunambig(tags, args.numseedsperpos)
+        POSes, originalseeds = get_seedwords(tags, args.numseedsperpos)
         if args.numseedsperpos == 0:
             originalseeds = {seed:tags for seed, tags in carlsonseeds.iteritems() if seed in assignments}
         baselinetags = {word:{"UNK":1} for word in assignments}
