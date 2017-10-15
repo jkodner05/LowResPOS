@@ -4,7 +4,7 @@ header="#$ -cwd
 \n#$ -V
 \n#$ -l mem=64G
 \n#$ -l h_cpu=372800
-\n#$ -pe parallel-onenode 4
+\n#$ -pe parallel-onenode 2
 \n#$ -S /bin/bash
 \n#$ -M jkodner@seas.upenn.edu
 \n#$ -m eas
@@ -39,7 +39,7 @@ if $CREATE; then
     echo python parkesclustering.py --corpus $CORPUS $DATA_DIR $INTERMED_DIR/$SIM_FILE -k $K_SEQUENCE -s $NUM_SEEDS --both $OTHER_ARGS >> $INTERMED_DIR/$SCRIPT_FILE
     qsub $INTERMED_DIR/$SCRIPT_FILE
 else
-    echo python parkesclustering.py --loadmats --corpus $DATA_DIR $INTERMED_DIR/$SIM_FILE -k $K_SEQUENCE -s $NUM_SEEDS --both $OTHER_ARGS -c $THRESHOLD >> $INTERMED_DIR/$SCRIPT_FILE
+    echo python parkesclustering.py --loadmats --corpus $CORPUS $DATA_DIR $INTERMED_DIR/$SIM_FILE -k $K_SEQUENCE -s $NUM_SEEDS --both $OTHER_ARGS -c $THRESHOLD >> $INTERMED_DIR/$SCRIPT_FILE
     if $SUBMIT; then
 	qsub $INTERMED_DIR/$SCRIPT_FILE
     else
