@@ -27,6 +27,7 @@ START = "#START"
 STOP = "#STOP"
 
 SKIP_TAG = "SKIP"
+PUNCT_TAGS = set([])
 
 CONF_THRESHOLD = 0.0
 
@@ -34,6 +35,11 @@ WSJ_FINDWORD = re.compile(r"\(([\w\d\.,\?!]+)\s([A-Za-z\d'-\.,\?!]+?)\)")
 
 carlsonseeds = {"arm":{"NN":1},"ate":{"VB":1},"baby":{"NN":1},"balloon":{"NN":1},"bed":{"NN":1},"big":{"JJ":1},"black":{"JJ":1},"break":{"VB":1},"climb":{"VB":1},"come":{"VB":1},"cookie":{"NN":1},"crying":{"VB":1},"cut":{"VB":1},"dad":{"NN":1},"dirty":{"JJ":1},"do":{"VB":1},"down":{"RB":1},"eat":{"VB":1},"face":{"NN":1},"fall":{"VB":1},"goes":{"VB":1},"happy":{"JJ":1},"have":{"VB":1},"hide":{"VB":1},"him":{"PRP":1},"hold":{"VB":1},"hug":{"NN":1},"hurt":{"VB":1},"in":{"IN":1},"juice":{"NN":1},"make":{"VB":1},"milk":{"NN":1},"mom":{"NN":1},"move":{"VB":1},"not":{"RB":1},"off":{"RB":1},"on":{"RB":1},"one":{"DT":1},"put":{"VB":1},"run":{"VB":1},"sad":{"JJ":1},"say":{"VB":1},"sleep":{"VB":1},"small":{"JJ":1},"spoon":{"NN":1},"this":{"DT":1},"three":{"DT":1},"through":{"RB":1},"throw":{"VB":1},"to":{"IN":1},"today":{"RB":1},"tomorrow":{"RB":1},"train":{"NN":1},"tree":{"NN":1},"turn":{"NN":1},"two":{"DT":1},"up":{"RB":1},"very":{"RB":1},"walk":{"VB":1},"watch":{"VB":1},"water":{"NN":1},"by":{"IN":1},"cake":{"NN":1},"call":{"VB":1},"car":{"NN":1},"carry":{"VB":1},"chair":{"NN":1},"clean":{"JJ":1},"flower":{"NN":1},"fly":{"VB":1},"from":{"IN":1},"girl":{"NN":1},"give":{"VB":1},"kick":{"VB":1},"last":{"JJ":1},"later":{"RB":1},"look":{"VB":1},"out":{"RB":1},"play":{"VB":1},"stand":{"VB":1},"there":{"RB":1},"we":{"PRP":1},"wet":{"JJ":1},"who":{"PRP":1},"work":{"NN":1},"you":{"PRP":1}}
 
+
+def set_puncttags(corpus):
+    global PUNCT_TAGS
+    if corpus.lower() == "conll":
+        PUNCT_TAGS = set(["_","x","mad","mid","pad"])
 
 def tag_word(wordtup, keeptag):
     if keeptag:
@@ -1220,6 +1226,11 @@ def evaluate_tokens(basedir, corpustype, assignments, evaltagmap, disttagmap, se
     print "% all correct\t\t", float(numcorrect)/numallpospairs*100
     print "% top k correct\t\t", float(numcorrect)/numpospairs*100
 
+def print_confusions(confusion_map):
+    for tag, confusions in confusion_map.iteritems():
+        print tag
+        for ctag, count in confusions.iteritems():
+            print "\t" + ctag + "\t" + str(count)
 
 def evaluate_types(assignments, seedwords, correcttags, evaltagmap):
     numassgn = 0
@@ -1229,7 +1240,18 @@ def evaluate_types(assignments, seedwords, correcttags, evaltagmap):
     numcorrect_seeds = 0
     numcorrect_total = 0
 
+    confusion_map = defaultdict(lambda : defaultdict(int))
+    multi_map = defaultdict(lambda : defaultdict(int))
+
     for word, assgn in assignments.iteritems():
+
+        keep = False
+        for tag, val in correcttags[word].iteritems():
+            if tag not in PUNCT_TAGS:
+                keep = True
+        if not keep:
+            continue
+
         if word in seedwords:
             numseeds += 1
         else:
@@ -1252,6 +1274,10 @@ def evaluate_types(assignments, seedwords, correcttags, evaltagmap):
                 numcorrect_seeds += 1
             else:
                 numcorrect_assgn += 1
+            for tag in correcttagdict:
+                multi_map[tag][maxtag] += 1
+        for tag in correcttagdict:
+            confusion_map[tag][maxtag] += 1
             
     numtotal = numseeds + numassgn
     numcorrect_total = numcorrect_seeds + numcorrect_assgn
@@ -1274,6 +1300,14 @@ def evaluate_types(assignments, seedwords, correcttags, evaltagmap):
     print "% total correct\t\t", float(numcorrect_total)/numtotal*100
     print ""
 
+#    print "Confusion pairs"
+#    print_confusions(confusion_map)
+#    print ""
+
+#    print "Ambiguity pairs"
+#    print_confusions(multi_map)
+#    print ""
+
 
 def get_seedwordsunambig(wordsbytagfreq, seedsperpos):
     def sortfunc(x, POS):
@@ -1291,6 +1325,12 @@ def get_seedwordsunambig(wordsbytagfreq, seedsperpos):
         POSes.remove(SKIP_TAG)
     except KeyError:
         pass
+    for tag in PUNCT_TAGS:
+        try:
+            POSes.remove(tag)
+        except KeyError:
+            pass
+
     for POS in POSes:
         sortedwords = [word for word in sorted(wordsbytagfreq.iteritems(), key = lambda x: sortfunc(x,POS), reverse=True) if POS in word[1] and len(word[1]) == 1]
 #        print POS, len(sortedwords)
@@ -1303,7 +1343,6 @@ def get_seedwordsunambig(wordsbytagfreq, seedsperpos):
             seedwords_byword[word] = wordPOSes
 
     finalPOSes = seedwords_byPOS.keys()
-
 
     print len(finalPOSes), len(seedwords_byword)
     print seedwords_byPOS
@@ -1321,10 +1360,16 @@ def get_seedwords(wordsbytagfreq, seedsperpos):
     POSes = set([])
     for word, tags in wordsbytagfreq.iteritems():
         POSes = POSes.union(set(tags.keys()))
+
     try:
         POSes.remove(SKIP_TAG)
     except KeyError:
         pass
+    for tag in PUNCT_TAGS:
+        try:
+            POSes.remove(tag)
+        except KeyError:
+            pass
     for POS in POSes:
         sortedwords = [word[0] for word in sorted(wordsbytagfreq.iteritems(), key = lambda x: sortfunc(x,POS), reverse=True)][0:seedsperpos]
         seedwords_byPOS[POS] = sortedwords
@@ -1961,6 +2006,7 @@ if __name__ == "__main__":
     parser.add_argument("--distmap", nargs="?", help="map input tags to training tags", type=str)
     parser.add_argument("-c", "--confidence", help="seed confidence threshold", type=float)
     parser.add_argument("--guessremainder", help="apply simple classification for tokens outside the top k", action="store_true")
+    parser.add_argument("--nopunctseeds", help="don't assign seeds to punctuation tags but leave punctuation in place otherwise", action="store_true")
 
     args = parser.parse_args()
 
@@ -1985,6 +2031,12 @@ if __name__ == "__main__":
     if not args.loadmats:
         create_matrices(args.inputdir, args.corpus, args.datafile, int(args.numclustertypes), args.numcontexttypes, args.ktagsfile, args.mtagsfile)
     else:
+        if args.nopunctseeds:
+            print "EXCLUDING PUNCTUATION FROM SEED SET (NOT SCORED IN TYPE ACC; ALL WRONG IN TOKEN ACC)"
+            if args.corpus.lower() != "conll":
+                exit("not implemented yet")
+            set_puncttags(args.corpus)
+
         print "CONFIDENCE", CONF_THRESHOLD
 
         distmap = None
