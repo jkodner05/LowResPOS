@@ -1433,10 +1433,70 @@ def get_contextvecs_both(words_topk, contexts, words_topm=None):
     if words_topm:
         words_topm = set(words_topm)
     bothindexdict = get_indexdict(contexts.values(),(0,1), words_topm)
-
     bothcontextvecs = get_contextdict(words_topk, contexts, bothindexdict, (0,1))
-
     return bothcontextvecs
+
+
+def get_contextvecs_suffix(words_topk):
+    index = 0
+    indexdict = {}
+    BILEN = 2
+    TRILEN = 3
+    for word in words_topk:
+        if len(word) > BILEN+1:
+            indexdict[word[0-BILEN:]] = index
+            index += 1
+        if len(word) > TRILEN+1:
+            indexdict[word[0-TRILEN:]] = index
+            index += 1
+
+    suffdict = {}
+    wordtrirootdict = {}
+    wordbirootdict = {}
+    contextvec = np.repeat(0.0000001, max(indexdict.values())+1)
+    for word in words_topk:
+        if len(word) > BILEN+1:
+            root = word[:0-BILEN]
+            if root not in suffdict:
+                suffdict[root] = contextvec.copy()
+            suff = word[0-BILEN:]
+            suffdict[root][indexdict[suff]] += 1
+            wordbirootdict[word] = root
+        if len(word) > TRILEN+1:
+            root = word[:0-TRILEN]
+            if root not in suffdict:
+                suffdict[root] = contextvec.copy()
+            suff = word[0-TRILEN:]
+            suffdict[root][indexdict[suff]] += 1
+            wordtrirootdict[word] = root
+
+
+    contextdict = {}
+    for word in words_topk:
+        try:
+            tricontexts = suffdict[wordtrirootdict[word]]
+        except KeyError:
+            tricontexts = contextvec.copy()
+        try:
+            bicontexts = suffdict[wordbirootdict[word]]
+        except KeyError:
+            bicontexts = contextvec.copy()
+
+        contextdict[word] = np.hstack((tricontexts,bicontexts))
+
+    return contextdict
+
+
+def merge_contextvecs(vecs1, vecs2):
+    mergedvecs = {}
+
+    for word in vecs1:
+        mergedvecs[word] = np.hstack((vecs1[word],vecs2[word]))
+#        print word, vecs1[word].shape, vecs2[word].shape, mergedvecs[word].shape
+#    print type(vecs1[word]), type(vecs2[word]), type(mergedvecs[word])
+#    print vecs1[word].shape, vecs2[word].shape, mergedvecs[word].shape
+
+    return mergedvecs
 
 
 def calc_KL(word1, word2, contextvecs):
@@ -1819,7 +1879,7 @@ def combinedistances(dists1, dists2, topkwords):
 #                print i, j, "\t", distances[i,j], distances[j,i], square1[i,j] == square1[j,i], square2[i,j] == square2[j,i]
     return distances.squareform(distances)
 
-def create_matrices(inputdir, corpus, datafile, k, m, ktagsfname, mtagsfname):
+def create_matrices(inputdir, corpus, datafile, k, m, ktagsfname, mtagsfname, segment_suffixes):
     print "Reading corpus files from", inputdir
     tags, freqs, contexts = read_corpusdirfiles(inputdir, corpus)
     print "Total types in corpus\t", len(freqs)
@@ -1845,7 +1905,11 @@ def create_matrices(inputdir, corpus, datafile, k, m, ktagsfname, mtagsfname):
     rightdist = None
     bothdist = None
 
-    bothcontextvecs= get_contextvecs_both(words_topk, contexts, words_topm=words_topm)
+    bothcontextvecs = get_contextvecs_both(words_topk, contexts, words_topm=words_topm)
+    if segment_suffixes:
+        suffcontextvecs = get_contextvecs_suffix(words_topk)
+        bothcontextvecs = merge_contextvecs(bothcontextvecs, suffcontextvecs)
+
 
     print "Calculating vector distances..."
     start = time.time()
@@ -2007,6 +2071,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--confidence", help="seed confidence threshold", type=float)
     parser.add_argument("--guessremainder", help="apply simple classification for tokens outside the top k", action="store_true")
     parser.add_argument("--nopunctseeds", help="don't assign seeds to punctuation tags but leave punctuation in place otherwise", action="store_true")
+    parser.add_argument("--segsuff", help="segment off suffixes and classify the roots instead", action="store_true")
 
     args = parser.parse_args()
 
@@ -2029,7 +2094,7 @@ if __name__ == "__main__":
     CONF_THRESHOLD = args.confidence
 
     if not args.loadmats:
-        create_matrices(args.inputdir, args.corpus, args.datafile, int(args.numclustertypes), args.numcontexttypes, args.ktagsfile, args.mtagsfile)
+        create_matrices(args.inputdir, args.corpus, args.datafile, int(args.numclustertypes), args.numcontexttypes, args.ktagsfile, args.mtagsfile, args.segsuff)
     else:
         if args.nopunctseeds:
             print "EXCLUDING PUNCTUATION FROM SEED SET (NOT SCORED IN TYPE ACC; ALL WRONG IN TOKEN ACC)"
