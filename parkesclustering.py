@@ -47,7 +47,14 @@ def tag_word(wordtup, keeptag):
     else:
         return wordtup[1]
 
-def read_turkishtsfile(filename, tags, freqs, contexts):
+def check_tokenlimit(maxtokens, numtokens):
+    if maxtokens and numtokens > maxtokens:
+        print "REACHED TOKEN LIMIT"
+        print "Num Tokens:\t", numtokens
+        return True
+    return False
+
+def read_turkishtsfile(filename, tags, freqs, contexts, numtokens, maxtokens):
     findword = re.compile(r"([^\s]+)_([^\s]+)")
     with open(filename, "r") as f:
         prevprev = START
@@ -60,9 +67,12 @@ def read_turkishtsfile(filename, tags, freqs, contexts):
                 if "//" in wordtup[0]:
                     continue
                 word = tag_word((wordtup[1],wordtup[0]),False).decode("utf-8").lower()
+                numtokens += 1
+                if check_tokenlimit(maxtokens, numtokens):
+                    return tags, freqs, contexts, numtokens
+
 #                if word == u"\u0130mparatorlu\u011fu'nu":
 #                    print "GOT IT"
-
                 if word not in tags:
                     tags[word] = {}
                 if wordtup[1] not in tags[word]:
@@ -83,10 +93,10 @@ def read_turkishtsfile(filename, tags, freqs, contexts):
 #        print set([tag for tagdict in tags.values() for tag in tagdict])
 
     print len(freqs), sum(freqs.values())
-    return tags, freqs, contexts
+    return tags, freqs, contexts, numtokens
 
 
-def read_ctbfile(filename, tags, freqs, contexts):
+def read_ctbfile(filename, tags, freqs, contexts, numtokens, maxtokens):
     findword = re.compile(r"([^\s]+)_([^\s]+)")
     with open(filename, "r") as f:
         prevprev = START
@@ -101,6 +111,10 @@ def read_ctbfile(filename, tags, freqs, contexts):
                 if wordtup[1].lower() == "-none-":
                     continue
                 word = tag_word((wordtup[1],wordtup[0]),False).lower()
+                numtokens += 1
+                if check_tokenlimit(maxtokens, numtokens):
+                    return tags, freqs, contexts, numtokens
+
                 if word not in tags:
                     tags[word] = {}
                 if wordtup[1] not in tags[word]:
@@ -119,10 +133,10 @@ def read_ctbfile(filename, tags, freqs, contexts):
 
 #        print set([tag for tagdict in tags.values() for tag in tagdict])
 
-    return tags, freqs, contexts
+    return tags, freqs, contexts, numtokens
 
 
-def read_ctbfile_eval(filename):
+def read_ctbfile_eval(filename, numtokens, maxtokens):
     findword = re.compile(r"([^\s]+)_([^\s]+)")
     pospairs = []
     with open(filename, "r") as f:
@@ -133,14 +147,15 @@ def read_ctbfile_eval(filename):
             if not words:
                 continue
             pospairs.extend([(tag_word((wordtup[1],wordtup[0]),False),wordtup[1]) for wordtup in words if wordtup[1].lower() != "-none-"])
+            numtokens += len(words)
             #try:
             #    pospairs.extend([(tag_word(wordtup,True).decode("utf-8"),CHILDES_TAGMAP[wordtup[0]]) for wordtup in words])
             #except KeyError:
             #    pospairs.extend([(tag_word(wordtup,True).decode("utf-8"),"SKIP") for wordtup in words])
-    return pospairs
+    return pospairs, numtokens
 
 
-def read_turkishtsfile_eval(filename):
+def read_turkishtsfile_eval(filename, numtokens, maxtokens):
     findword = re.compile(r"([^\s]+)_([^\s]+)")
     pospairs = []
     types = set([])
@@ -154,15 +169,16 @@ def read_turkishtsfile_eval(filename):
             for wordtup in words:
                 types.add(wordtup[0])
             pospairs.extend([(tag_word((wordtup[1],wordtup[0]),False).decode("utf-8").lower(),wordtup[1]) for wordtup in words if wordtup[1].lower() != "-none-"])
+            numtokens += len(words)
             #try:
             #    pospairs.extend([(tag_word(wordtup,True).decode("utf-8"),CHILDES_TAGMAP[wordtup[0]]) for wordtup in words])
             #except KeyError:
             #    pospairs.extend([(tag_word(wordtup,True).decode("utf-8"),"SKIP") for wordtup in words])
-    return pospairs
+    return pospairs, numtokens
 
 
 
-def read_wsjfile(filename, tags, freqs, contexts):
+def read_wsjfile(filename, tags, freqs, contexts, numtokens, maxtokens):
 #    findword = re.compile(r"\((\w+)\s([a-z'-]+)\)")
     findword = WSJ_FINDWORD
     with open(filename, "r") as f:
@@ -184,6 +200,10 @@ def read_wsjfile(filename, tags, freqs, contexts):
                 word = tag_word(wordtup,False).decode("utf-8").lower()
                 if ")" in word:
                     print word, line
+                numtokens += 1
+                if check_tokenlimit(maxtokens, numtokens):
+                    return tags, freqs, contexts, numtokens
+
                 if word not in tags:
                     tags[word] = {}
                 if wordtup[0] not in tags[word]:
@@ -201,10 +221,10 @@ def read_wsjfile(filename, tags, freqs, contexts):
 
 #        print set([tag for tagdict in tags.values() for tag in tagdict])
 
-    return tags, freqs, contexts
+    return tags, freqs, contexts, numtokens
 
 
-def read_wsjfile_eval(filename):
+def read_wsjfile_eval(filename, numtokens, maxtokens):
     findword = WSJ_FINDWORD
     pospairs = []
     with open(filename, "r") as f:
@@ -218,14 +238,15 @@ def read_wsjfile_eval(filename):
             if not words:
                 continue
             pospairs.extend([(tag_word(wordtup,False).decode("utf-8"),wordtup[0]) for wordtup in words])
+            numtokens += len(words)
             #try:
             #    pospairs.extend([(tag_word(wordtup,True).decode("utf-8"),CHILDES_TAGMAP[wordtup[0]]) for wordtup in words])
             #except KeyError:
             #    pospairs.extend([(tag_word(wordtup,True).decode("utf-8"),"SKIP") for wordtup in words])
-    return pospairs
+    return pospairs, numtokens
 
 
-def read_childesbrownfile_eval(filename):
+def read_childesbrownfile_eval(filename, numtokens, maxtokens):
     findword = re.compile(r"([A-Za-z:]+)\|([^\s]+)")
     pospairs = []
     with open(filename, "r") as f:
@@ -235,16 +256,16 @@ def read_childesbrownfile_eval(filename):
 
             words = findword.findall(line.lower())
             pospairs.extend([(tag_word(wordtup,False).decode("utf-8"),wordtup[0]) for wordtup in words])
+            numtokens += len(words)
             #try:
             #    pospairs.extend([(tag_word(wordtup,True).decode("utf-8"),CHILDES_TAGMAP[wordtup[0]]) for wordtup in words])
             #except KeyError:
             #    pospairs.extend([(tag_word(wordtup,True).decode("utf-8"),"SKIP") for wordtup in words])
-    return pospairs
+    return pospairs, numtokens
 
 
-def read_childesbrownfile(filename, tags, freqs, contexts):
+def read_childesbrownfile(filename, tags, freqs, contexts, numtokens, maxtokens):
     findword = re.compile(r"([A-Za-z:]+)\|([^\s]+)")
-
     with open(filename, "r") as f:
         prevprev = START
         prev = START
@@ -255,6 +276,10 @@ def read_childesbrownfile(filename, tags, freqs, contexts):
             words = findword.findall(line.lower())
             for wordtup in words:
                 word = tag_word(wordtup,False).decode("utf-8")
+                numtokens += 1
+                if check_tokenlimit(maxtokens, numtokens):
+                    return tags, freqs, contexts, numtokens
+
                 if word not in tags:
                     tags[word] = {}
                 if wordtup[0] not in tags[word]:
@@ -279,10 +304,10 @@ def read_childesbrownfile(filename, tags, freqs, contexts):
 
             contexts[prev].add((prevprev,STOP))
 
-    return tags, freqs, contexts
+    return tags, freqs, contexts, numtokens
 
 
-def read_conlluniversalfile_eval(filename):
+def read_conlluniversalfile_eval(filename, numtokens, maxtokens):
     findword = re.compile(r"^\d+\t(.+?)\t.+?\t(\w+)")
     pospairs = []
     with open(filename, "r") as f:
@@ -291,17 +316,17 @@ def read_conlluniversalfile_eval(filename):
             if not words:
                 continue
             pospairs.extend([(tag_word((wordtup[1],wordtup[0]),False).decode("utf-8").lower(),wordtup[1]) for wordtup in words])
+            numtokens += len(words)
             #try:
             #    pospairs.extend([(tag_word(wordtup,True).decode("utf-8"),CHILDES_TAGMAP[wordtup[0]]) for wordtup in words])
             #except KeyError:
             #    pospairs.extend([(tag_word(wordtup,True).decode("utf-8"),"SKIP") for wordtup in words])
-    return pospairs
+    return pospairs, numtokens
 
 
-def read_conlluniversalfile(filename, tags, freqs, contexts):
+def read_conlluniversalfile(filename, tags, freqs, contexts, numtokens, maxtokens):
     findword = re.compile(r"^\d+\t(.+?)\t.+?\t(\w+)")
 #    findword = re.compile(r"\d+\t(.+?)\t.+?\t(\w+)\t(\w+)")
-
     with open(filename, "r") as f:
         prevprev = START
         prev = START
@@ -319,6 +344,10 @@ def read_conlluniversalfile(filename, tags, freqs, contexts):
             words = findword.findall(line.lower())
             for wordtup in words:
                 word = tag_word((wordtup[1],wordtup[0]),False).decode("utf-8").lower()
+                numtokens += 1
+                if check_tokenlimit(maxtokens, numtokens):
+                    return tags, freqs, contexts, numtokens
+
                 if word not in tags:
                     tags[word] = defaultdict(int)
                 tags[word][wordtup[1]] += 1
@@ -331,12 +360,11 @@ def read_conlluniversalfile(filename, tags, freqs, contexts):
         prevprev = START
         prev = START
 
-    return tags, freqs, contexts
+    return tags, freqs, contexts, numtokens
 
 
-def read_lctlfile(filename, tags, freqs, contexts):
+def read_lctlfile(filename, tags, freqs, contexts, numtokens, maxtokens):
     findword = re.compile(r"""pos="(\w+)">(.+?)</""")
-
     with open(filename, "r") as f:
         prevprev = START
         prev = START
@@ -353,6 +381,10 @@ def read_lctlfile(filename, tags, freqs, contexts):
             words = findword.findall(line.lower())
             for wordtup in words:
                 word = tag_word((wordtup[1],wordtup[0]),False).decode("utf-8")
+                numtokens += 1
+                if check_tokenlimit(maxtokens, numtokens):
+                    return tags, freqs, contexts, numtokens
+
                 freqs[word] += 1
                 if word not in tags:
                     tags[word] = defaultdict(int)
@@ -362,28 +394,33 @@ def read_lctlfile(filename, tags, freqs, contexts):
                 prevprev = prev
                 prev = word
 
-    return tags, freqs, contexts
+    return tags, freqs, contexts, numtokens
 
 
 
-def read_corpusdirfiles(basedir, corpustype):
+def read_corpusdirfiles(basedir, corpustype, maxtokens):
     tags = {}
     freqs = defaultdict(int)
     contexts = defaultdict(lambda : set([]))
+    numtokens = 0
     for subdir, dirs, files in os.walk(basedir):
+        if check_tokenlimit(maxtokens, numtokens):
+            break
         for f in files:
+            if check_tokenlimit(maxtokens, numtokens):
+                break
             if corpustype == "wsj":
-                tags, freqs, contexts = read_wsjfile(os.path.join(subdir,f), tags, freqs, contexts)
+                tags, freqs, contexts, numtokens = read_wsjfile(os.path.join(subdir,f), tags, freqs, contexts, numtokens, maxtokens)
             if corpustype == "ctb":
-                tags, freqs, contexts = read_ctbfile(os.path.join(subdir,f), tags, freqs, contexts)
+                tags, freqs, contexts, numtokens = read_ctbfile(os.path.join(subdir,f), tags, freqs, contexts, numtokens, maxtokens)
             if corpustype == "turkishts":
-                tags, freqs, contexts = read_turkishtsfile(os.path.join(subdir,f), tags, freqs, contexts)
+                tags, freqs, contexts, numtokens = read_turkishtsfile(os.path.join(subdir,f), tags, freqs, contexts, numtokens, maxtokens)
             elif corpustype == "brown":
-                tags, freqs, contexts = read_childesbrownfile(os.path.join(subdir,f), tags, freqs, contexts)
+                tags, freqs, contexts, numtokens = read_childesbrownfile(os.path.join(subdir,f), tags, freqs, contexts, numtokens, maxtokens)
             elif corpustype == "conll":
-                tags, freqs, contexts = read_conlluniversalfile(os.path.join(subdir,f), tags, freqs, contexts)
+                tags, freqs, contexts, numtokens = read_conlluniversalfile(os.path.join(subdir,f), tags, freqs, contexts, numtokens, maxtokens)
             elif corpustype == "lctl":
-                tags, freqs, contexts = read_lctlfile(os.path.join(subdir,f), tags, freqs, contexts)
+                tags, freqs, contexts, numtokens = read_lctlfile(os.path.join(subdir,f), tags, freqs, contexts, numtokens, maxtokens)
 #    tags = {k:dict(v) for k, v in tags.iteritems()}
     freqs = dict(freqs)
     contexts = dict(contexts)
@@ -964,7 +1001,6 @@ def crf_tag(basedir, corpustype, assignments, seeds, outfile):
     print "OOV Correct\t", numOOVcorrect/numOOV, numOOV
     print "non-OOV Correct\t", (numcorrect-numOOVcorrect)/(numtotal-numOOV)
     print "Clustering Correct\t", (numcorrect_byclustering)/(numtotal-numOOV)
-    exit()
 
 
 
@@ -1150,7 +1186,7 @@ def crf_tag_old(basedir, corpustype, assignments, seeds, outfile):
     exit()
 
 
-def evaluate_tokens(basedir, corpustype, assignments, evaltagmap, disttagmap, seeds=None, ngram=False, outfile=None):
+def evaluate_tokens(basedir, corpustype, assignments, evaltagmap, disttagmap, maxtokens, seeds=None, ngram=False, outfile=None):
     numallpospairs = 0
     numpospairs = 0
     numcorrect = 0
@@ -1186,18 +1222,26 @@ def evaluate_tokens(basedir, corpustype, assignments, evaltagmap, disttagmap, se
                 if evaltagmap[disttagmap[pos]] == evaltagmap[goldpos]:
                     numcorrect += 1
     else:
+        numtokens = 0
         for subdir, dirs, files in os.walk(basedir):
+            if check_tokenlimit(maxtokens, numtokens):
+                break
             for f in files:
+                if check_tokenlimit(maxtokens, numtokens):
+                    break
                 if corpustype == "brown":
-                    allpospairs = read_childesbrownfile_eval(os.path.join(subdir,f))
+                    allpospairs, numtokens = read_childesbrownfile_eval(os.path.join(subdir,f), numtokens, maxtokens)
                 elif corpustype == "wsj":
-                    allpospairs = read_wsjfile_eval(os.path.join(subdir,f))
+                    allpospairs, numtokens = read_wsjfile_eval(os.path.join(subdir,f), numtokens, maxtokens)
                 elif corpustype == "ctb":
-                    allpospairs = read_ctbfile_eval(os.path.join(subdir,f))
+                    allpospairs, numtokens = read_ctbfile_eval(os.path.join(subdir,f), numtokens, maxtokens)
                 elif corpustype == "turkishts":
-                    allpospairs = read_turkishtsfile_eval(os.path.join(subdir,f))
+                    allpospairs, numtokens = read_turkishtsfile_eval(os.path.join(subdir,f), numtokens, maxtokens)
                 elif corpustype == "conll":
-                    allpospairs = read_conlluniversalfile_eval(os.path.join(subdir,f))
+                    allpospairs, numtokens = read_conlluniversalfile_eval(os.path.join(subdir,f), numtokens, maxtokens)
+                
+                if check_tokenlimit(maxtokens, numtokens):
+                    allpospairs = allpospairs[0:maxtokens]
                 pospairs = [pair for pair in allpospairs if pair[0] in assignments]
                 numallpospairs += len(allpospairs)
                 numpospairs += len(pospairs)
@@ -1806,8 +1850,8 @@ def update_seedwords(seedwords_bywords, assignments, confidences):
     return seedwords_bywords
 
 
-def assign_remainder(inputdir, corpus, words, k, m, seeds, outfile, oldassignments):
-    tags, freqs, contexts = read_corpusdirfiles(inputdir, corpus)
+def assign_remainder(inputdir, corpus, words, k, m, seeds, outfile, oldassignments, maxtokens):
+    tags, freqs, contexts = read_corpusdirfiles(inputdir, corpus, maxtokens)
     words_topk = words[0:k]
     words_topm = None
     if m:
@@ -1834,7 +1878,7 @@ def assign_remainder(inputdir, corpus, words, k, m, seeds, outfile, oldassignmen
             mindistance = None
             besttag = "UNK"
             for seed in seeds:
-                distance = calc_KL_ndarray2(contextvecs[word], contextvecs[seed])
+                distance = calc_KL_ndarray2(contextvecs[word], contextvecs[seed], word, seed)
                 distances[word][seed] = distance
                 if mindistance == None or distance < mindistance:
                     mindistance = distance
@@ -1879,16 +1923,21 @@ def combinedistances(dists1, dists2, topkwords):
 #                print i, j, "\t", distances[i,j], distances[j,i], square1[i,j] == square1[j,i], square2[i,j] == square2[j,i]
     return distances.squareform(distances)
 
-def create_matrices(inputdir, corpus, datafile, k, m, ktagsfname, mtagsfname, segment_suffixes):
+def create_matrices(inputdir, corpus, datafile, k, m, ktagsfname, mtagsfname, segment_suffixes, maxtokens):
     print "Reading corpus files from", inputdir
-    tags, freqs, contexts = read_corpusdirfiles(inputdir, corpus)
+    tags, freqs, contexts = read_corpusdirfiles(inputdir, corpus, maxtokens)
     print "Total types in corpus\t", len(freqs)
     print "Total tokens in corpus\t", sum(freqs.values())
+
     if ktagsfname:
         tagset = load_tagsfile(ktagsfname)
         words_topk = get_tagset_topk(freqs, k, tagset)
     else:
         words_topk = get_topk(freqs, k)
+
+    tokensaccounted = sum([freqs[word] for word in freqs if word in words_topk])
+    print "Types Accounted for in top k, (%)\t", k, float(k)/len(freqs)*100
+    print "Tokens Accounted for in top k, (%)\t", tokensaccounted, float(tokensaccounted)/sum(freqs.values())*100
 
     words_topm = None
     if m > 0:
@@ -2063,6 +2112,7 @@ if __name__ == "__main__":
     parser.add_argument("-k", "--numclustertypes", help="cluster top k words", type=str)
     parser.add_argument("-s", "--numseedsperpos", help="number of seed words per POS", type=int)
     parser.add_argument("-m", "--numcontexttypes", nargs="?", help="filter out all but top m context words", type=int)    
+    parser.add_argument("-t", "--numtokens", nargs="?", help="set a maximum number of tokens to train on. Only used when creating", type=int)
     parser.add_argument("--ktagsfile", nargs="?", help="only keep cluster words with these tags", type=str)
     parser.add_argument("--mtagsfile", nargs="?", help="only keep context words with these tags", type=str)
     parser.add_argument("--both", help="compute a single tree on both contexts rather than one for each", action="store_true")
@@ -2094,7 +2144,7 @@ if __name__ == "__main__":
     CONF_THRESHOLD = args.confidence
 
     if not args.loadmats:
-        create_matrices(args.inputdir, args.corpus, args.datafile, int(args.numclustertypes), args.numcontexttypes, args.ktagsfile, args.mtagsfile, args.segsuff)
+        create_matrices(args.inputdir, args.corpus, args.datafile, int(args.numclustertypes), args.numcontexttypes, args.ktagsfile, args.mtagsfile, args.segsuff, args.numtokens)
     else:
         if args.nopunctseeds:
             print "EXCLUDING PUNCTUATION FROM SEED SET (NOT SCORED IN TYPE ACC; ALL WRONG IN TOKEN ACC)"
@@ -2134,7 +2184,7 @@ if __name__ == "__main__":
 
         if args.guessremainder:
             print "Reading corpus files from", args.inputdir
-            remainder_assignments = assign_remainder(args.inputdir, args.corpus, words, int(k), 10000, originalseeds, args.datafile, assignments)
+            remainder_assignments = assign_remainder(args.inputdir, args.corpus, words, int(k), 10000, originalseeds, args.datafile, assignments, args.numtokens)
             both_assignments = copy.deepcopy(originalseeds)
             both_assignments = copy.deepcopy(assignments)
             for word, assgn in remainder_assignments.iteritems():
@@ -2142,10 +2192,10 @@ if __name__ == "__main__":
                 if word not in assignments or assignments[word] == "UNK":
                     both_assignments[word] = assgn
             print "Simple Classification of Remainder"
-            evaluate_tokens(args.inputdir, args.corpus, both_assignments, evalmap, distmap)        
+            evaluate_tokens(args.inputdir, args.corpus, both_assignments, evalmap, distmap, args.numtokens)        
 
         print "\nNo Classification of Remainder"
-        evaluate_tokens(args.inputdir, args.corpus, assignments, evalmap, distmap)
+        evaluate_tokens(args.inputdir, args.corpus, assignments, evalmap, distmap, args.numtokens)
 
         print "\nNGram Tagger"
 #        evaluate_tokens(args.inputdir, args.corpus, assignments, evalmap, distmap, outfile=args.datafile, seeds=originalseeds, ngram=True)
@@ -2161,10 +2211,10 @@ if __name__ == "__main__":
                 baselinetags[word] = seedtags
 
         assignments, confidences, seeds = assign(tags, words, int(k), distances, originalseeds, evalmap, {}, {})
-        evaluate_tokens(args.inputdir, args.corpus, assignments, evalmap, distmap, originalseeds)
+        evaluate_tokens(args.inputdir, args.corpus, assignments, evalmap, distmap, args.numtokens, originalseeds)
 #        assign(args.datafile, int(k), args.numcontexttypes, args.numseedsperpos, None, evalmap, distmap)
         print "\n\nSEEDS ONLY"
         evaluate_types(baselinetags, originalseeds, tags, evalmap)
-        evaluate_tokens(args.inputdir, args.corpus, baselinetags, evalmap, distmap)
+        evaluate_tokens(args.inputdir, args.corpus, baselinetags, evalmap, distmap, args.numtokens)
 
 
