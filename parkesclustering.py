@@ -12,9 +12,6 @@ import cPickle as pickle
 
 from readers import *
 
-START = "#START"
-STOP = "#STOP"
-
 SKIP_TAG = "SKIP"
 PUNCT_TAGS = set([])
 
@@ -371,20 +368,54 @@ def get_contextvecs_both(words_topk, contexts, words_topm=None):
     return bothcontextvecs
 
 
-def get_contextvecs_charsuff(words_topk):
+
+def get_contextvecs_truesuff(words_by_root, suffs_by_root, words_topk):
+    index = 0
+    indexdict = {}
+    for word in words_topk:
+        try:
+            root = words_by_root[word]
+            for suff in suffs_by_root[root]:
+                if suff not in indexdict:
+                    indexdict[suff] = index
+                    index += 1
+        except KeyError:
+            print "CANNOT FIND", word.encode("utf-8"), len(word)
+
+    print "TRUE SUFF STATS"
+    print "true suff dict lens"
+    print "\t", len(words_by_root.keys())
+    print "indices"
+    print "\t", index-1
+
+    contextdict = {}
+    for word in words_topk:
+        contextvec = np.repeat(0.0000001, max(indexdict.values())+1)
+        try:
+            root = words_by_root[word]
+            for suff in suffs_by_root[root]:
+                contextvec[indexdict[suff]] += 1
+        except KeyError:
+            print "CANNOT FIND", word.encode("utf-8"), len(word)
+        contextdict[word] = contextvec
+
+    return contextdict
+
+
+def get_contextvecs_charsuff(words_all, words_topk):
     index = 0
     indexdict = {}
     UNILEN = 1
     BILEN = 2
     TRILEN = 3
-    for word in words_topk:
-        if len(word) > UNILEN+1:
+    for word in words_all:
+        if len(word) > UNILEN+1 and word[0-UNILEN:] not in indexdict:
             indexdict[word[0-UNILEN:]] = index
             index += 1
-        if len(word) > BILEN+1:
+        if len(word) > BILEN+1 and word[0-BILEN:] not in indexdict:
             indexdict[word[0-BILEN:]] = index
             index += 1
-        if len(word) > TRILEN+1:
+        if len(word) > TRILEN+1 and word[0-TRILEN:] not in indexdict:
             indexdict[word[0-TRILEN:]] = index
             index += 1
 
@@ -392,8 +423,8 @@ def get_contextvecs_charsuff(words_topk):
     wordtrirootdict = {}
     wordbirootdict = {}
     wordunirootdict = {}
-    contextvec = np.repeat(0.0000001, max(indexdict.values())+1)
-    for word in words_topk:
+    contextvec = np.repeat(0.0000001/3, max(indexdict.values())+1)
+    for word in words_all:
         if len(word) > UNILEN+1:
             root = word[:0-UNILEN]
             if root not in suffdict:
@@ -416,23 +447,33 @@ def get_contextvecs_charsuff(words_topk):
             suffdict[root][indexdict[suff]] += 1
             wordtrirootdict[word] = root
 
+    print "CHAR SUFF STATS"
+    print "char suff dict lens"
+    print "\t", len(wordtrirootdict.keys()), len(wordbirootdict.keys()), len(wordunirootdict.keys())
+    print "numindices"
+    print "\t", contextvec.shape
 
     contextdict = {}
     for word in words_topk:
+
+
         try:
             tricontexts = suffdict[wordtrirootdict[word]]
         except KeyError:
-            tricontexts = contextvec.copy()
+            tricontexts = contextvec
         try:
             bicontexts = suffdict[wordbirootdict[word]]
         except KeyError:
-            bicontexts = contextvec.copy()
+            bicontexts = contextvec
         try:
             unicontexts = suffdict[wordunirootdict[word]]
         except KeyError:
-            unicontexts = contextvec.copy()
+            unicontexts = contextvec
 
-        contextdict[word] = np.hstack((tricontexts,bicontexts,unicontexts))
+        contextdict[word] = tricontexts + bicontexts + unicontexts
+#        print np.max(tricontexts + bicontexts + unicontexts), np.min(tricontexts + bicontexts + unicontexts)
+#        contextdict[word] = np.hstack((tricontexts,bicontexts,unicontexts))
+
 
     return contextdict
 
@@ -792,7 +833,7 @@ def combinedistances(dists1, dists2, topkwords):
 #                print i, j, "\t", distances[i,j], distances[j,i], square1[i,j] == square1[j,i], square2[i,j] == square2[j,i]
     return distances.squareform(distances)
 
-def create_matrices(inputdir, corpus, datafile, k, m, ktagsfname, mtagsfname, segment_charsuffs, maxtokens):
+def create_matrices(inputdir, corpus, datafile, k, m, ktagsfname, mtagsfname, segment_charsuffs, segment_truesuffs, maxtokens):
     print "Reading corpus files from", inputdir
     tags, freqs, contexts = read_corpusdirfiles(inputdir, corpus, maxtokens)
     print "Total types in corpus\t", len(freqs)
@@ -823,27 +864,31 @@ def create_matrices(inputdir, corpus, datafile, k, m, ktagsfname, mtagsfname, se
     rightdist = None
     bothdist = None
 
-    bothcontextvecs = get_contextvecs_both(words_topk, contexts, words_topm=words_topm)
+    allcontextvecs = get_contextvecs_both(words_topk, contexts, words_topm=words_topm)
+    if segment_truesuffs:
+        roots_by_word, suffixes_by_root = read_Xu_morphfile(segment_truesuffs)
+        truesuffcontextvecs = get_contextvecs_truesuff(roots_by_word, suffixes_by_root, words_topk)
+        allcontextvecs = merge_contextvecs(allcontextvecs, truesuffcontextvecs)
     if segment_charsuffs:
-        charsuffcontextvecs = get_contextvecs_charsuff(words_topk)
-        bothcontextvecs = merge_contextvecs(bothcontextvecs, charsuffcontextvecs)
+        charsuffcontextvecs = get_contextvecs_charsuff(freqs.keys(), words_topk)
+        allcontextvecs = merge_contextvecs(allcontextvecs, charsuffcontextvecs)
 
 
     print "Calculating vector distances..."
     start = time.time()
-    bothdist = calc_distances_multi(bothcontextvecs, words_topk, calc_KL_ndarray2, 16)
-#    bothdist = combinedistances(bothdist1, bothdist2, words_topk)
-#bothdist = calc_distances_multi(bothcontextvecs, words_topk, calc_KL_ndarray2, 16)
+    alldist = calc_distances_multi(allcontextvecs, words_topk, calc_KL_ndarray2, 16)
+#    alldist = combinedistances(alldist1, alldist2, words_topk)
+#alldist = calc_distances_multi(allcontextvecs, words_topk, calc_KL_ndarray2, 16)
     end = time.time()
     print "\ttook", (end - start), "seconds"
-    #print("Calculating both vector distances 4")
+    #print("Calculating all vector distances 4")
     #start = time.time()
-    #bothdist2 = calc_distances(bothcontextvecs, words_topk, calc_KL_ndarray2)
+    #alldist2 = calc_distances(allcontextvecs, words_topk, calc_KL_ndarray2)
     #end = time.time()
     #print (end - start)
-    #for i, bd in enumerate(bothdist2):
-    #    if round(bothdist[i],6) != round(bothdist2[i],6):
-    #        print "ERROR 1,2", i, bothdist[i], bothdist2[i]
+    #for i, bd in enumerate(alldist2):
+    #    if round(alldist[i],6) != round(alldist2[i],6):
+    #        print "ERROR 1,2", i, alldist[i], alldist2[i]
 
     print "Saving to", datafile
     with open(datafile, 'wb') as outstream:
@@ -852,7 +897,7 @@ def create_matrices(inputdir, corpus, datafile, k, m, ktagsfname, mtagsfname, se
         pickle.dump(words_topm, outstream)
         pickle.dump(leftdist, outstream)
         pickle.dump(rightdist, outstream)
-        pickle.dump(bothdist, outstream)
+        pickle.dump(alldist, outstream)
     print("Finished data tabulations.\n")
 
 
@@ -944,6 +989,7 @@ if __name__ == "__main__":
     parser.add_argument("--guessremainder", help="apply simple classification for tokens outside the top k", action="store_true")
     parser.add_argument("--nopunctseeds", help="don't assign seeds to punctuation tags but leave punctuation in place otherwise", action="store_true")
     parser.add_argument("--segcharsuff", help="segment off final unigram, bigram, trigrams to calc pseudo-roots. At pseudo-root attested n-grams to context vec", action="store_true")
+    parser.add_argument("--segtruesuff", nargs="?", help="like segcharsuff but reads roots and suffixes from data file (Xu automatic segmentation format)", type=str)
 
     args = parser.parse_args()
 
@@ -966,7 +1012,7 @@ if __name__ == "__main__":
     CONF_THRESHOLD = args.confidence
 
     if not args.loadmats:
-        create_matrices(args.inputdir, args.corpus, args.datafile, int(args.numclustertypes), args.numcontexttypes, args.ktagsfile, args.mtagsfile, args.segcharsuff, args.numtokens)
+        create_matrices(args.inputdir, args.corpus, args.datafile, int(args.numclustertypes), args.numcontexttypes, args.ktagsfile, args.mtagsfile, args.segcharsuff, args.segtruesuff, args.numtokens)
     else:
         if args.nopunctseeds:
             print "EXCLUDING PUNCTUATION FROM SEED SET (NOT SCORED IN TYPE ACC; ALL WRONG IN TOKEN ACC)"
