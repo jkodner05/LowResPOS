@@ -1,12 +1,16 @@
-import re
+import re, unicodedata
+from collections import defaultdict
+
+START = "#START"
+STOP = "#STOP"
 
 WSJ_FINDWORD = re.compile(r"\(([\w\d\.,\?!]+)\s([A-Za-z\d'-\.,\?!]+?)\)")
 
 def tag_word(wordtup, keeptag):
     if keeptag:
-        return wordtup[0] + "_" + wordtup[1]
+        return unicodedata.normalize('NFC',(wordtup[0] + "_" + wordtup[1]).decode("utf-8"))
     else:
-        return wordtup[1]
+        return unicodedata.normalize('NFC',wordtup[1].decode("utf-8"))
 
 def check_tokenlimit(maxtokens, numtokens):
     if maxtokens and numtokens > maxtokens:
@@ -27,7 +31,7 @@ def read_turkishtsfile(filename, tags, freqs, contexts, numtokens, maxtokens):
             for wordtup in words:
                 if "//" in wordtup[0]:
                     continue
-                word = tag_word((wordtup[1],wordtup[0]),False).decode("utf-8").lower()
+                word = tag_word((wordtup[1],wordtup[0]),False).lower()
                 numtokens += 1
                 if check_tokenlimit(maxtokens, numtokens):
                     return tags, freqs, contexts, numtokens
@@ -129,7 +133,7 @@ def read_turkishtsfile_eval(filename, numtokens, maxtokens):
                 break
             for wordtup in words:
                 types.add(wordtup[0])
-            pospairs.extend([(tag_word((wordtup[1],wordtup[0]),False).decode("utf-8").lower(),wordtup[1]) for wordtup in words if wordtup[1].lower() != "-none-"])
+            pospairs.extend([(tag_word((wordtup[1],wordtup[0]),False).lower(),wordtup[1]) for wordtup in words if wordtup[1].lower() != "-none-"])
             numtokens += len(words)
             #try:
             #    pospairs.extend([(tag_word(wordtup,True).decode("utf-8"),CHILDES_TAGMAP[wordtup[0]]) for wordtup in words])
@@ -158,7 +162,7 @@ def read_wsjfile(filename, tags, freqs, contexts, numtokens, maxtokens):
 
             words = findword.findall(line.lower())
             for i, wordtup in enumerate(words):
-                word = tag_word(wordtup,False).decode("utf-8").lower()
+                word = tag_word(wordtup,False).lower()
                 if ")" in word:
                     print word, line
                 numtokens += 1
@@ -198,7 +202,7 @@ def read_wsjfile_eval(filename, numtokens, maxtokens):
 
             if not words:
                 continue
-            pospairs.extend([(tag_word(wordtup,False).decode("utf-8"),wordtup[0]) for wordtup in words])
+            pospairs.extend([(tag_word(wordtup,False),wordtup[0]) for wordtup in words])
             numtokens += len(words)
             #try:
             #    pospairs.extend([(tag_word(wordtup,True).decode("utf-8"),CHILDES_TAGMAP[wordtup[0]]) for wordtup in words])
@@ -216,7 +220,7 @@ def read_childesbrownfile_eval(filename, numtokens, maxtokens):
                 continue
 
             words = findword.findall(line.lower())
-            pospairs.extend([(tag_word(wordtup,False).decode("utf-8"),wordtup[0]) for wordtup in words])
+            pospairs.extend([(tag_word(wordtup,False),wordtup[0]) for wordtup in words])
             numtokens += len(words)
             #try:
             #    pospairs.extend([(tag_word(wordtup,True).decode("utf-8"),CHILDES_TAGMAP[wordtup[0]]) for wordtup in words])
@@ -236,7 +240,7 @@ def read_childesbrownfile(filename, tags, freqs, contexts, numtokens, maxtokens)
 
             words = findword.findall(line.lower())
             for wordtup in words:
-                word = tag_word(wordtup,False).decode("utf-8")
+                word = tag_word(wordtup,False)
                 numtokens += 1
                 if check_tokenlimit(maxtokens, numtokens):
                     return tags, freqs, contexts, numtokens
@@ -276,7 +280,7 @@ def read_conlluniversalfile_eval(filename, numtokens, maxtokens):
             words = findword.findall(line.lower())
             if not words:
                 continue
-            pospairs.extend([(tag_word((wordtup[1],wordtup[0]),False).decode("utf-8").lower(),wordtup[1]) for wordtup in words])
+            pospairs.extend([(tag_word((wordtup[1],wordtup[0]),False).lower(),wordtup[1]) for wordtup in words])
             numtokens += len(words)
             #try:
             #    pospairs.extend([(tag_word(wordtup,True).decode("utf-8"),CHILDES_TAGMAP[wordtup[0]]) for wordtup in words])
@@ -304,7 +308,7 @@ def read_conlluniversalfile(filename, tags, freqs, contexts, numtokens, maxtoken
             ended = False
             words = findword.findall(line.lower())
             for wordtup in words:
-                word = tag_word((wordtup[1],wordtup[0]),False).decode("utf-8").lower()
+                word = tag_word((wordtup[1],wordtup[0]),False).lower()
                 numtokens += 1
                 if check_tokenlimit(maxtokens, numtokens):
                     return tags, freqs, contexts, numtokens
@@ -341,7 +345,7 @@ def read_lctlfile(filename, tags, freqs, contexts, numtokens, maxtokens):
 
             words = findword.findall(line.lower())
             for wordtup in words:
-                word = tag_word((wordtup[1],wordtup[0]),False).decode("utf-8")
+                word = tag_word((wordtup[1],wordtup[0]),False)
                 numtokens += 1
                 if check_tokenlimit(maxtokens, numtokens):
                     return tags, freqs, contexts, numtokens
@@ -357,3 +361,20 @@ def read_lctlfile(filename, tags, freqs, contexts, numtokens, maxtokens):
 
     return tags, freqs, contexts, numtokens
 
+
+
+def read_Xu_morphfile(filename):
+    roots_by_word = {}
+    suffixes_by_root = defaultdict(lambda : set([]))
+    with open(filename, "r") as f:
+        for line in f:
+            components = unicodedata.normalize('NFC',line.decode("utf-8")).split("\t")
+            word = components[0]
+            segmentation = components[1].split(" ")
+            root = segmentation[0]
+            finalsuff = segmentation[-1]
+            roots_by_word[word] = root
+            suffixes_by_root[root].add(finalsuff)
+
+    suffixes_by_root = dict(suffixes_by_root)
+    return roots_by_word, suffixes_by_root
