@@ -4,7 +4,7 @@ header="#$ -cwd
 \n#$ -V
 \n#$ -l mem=64G
 \n#$ -l h_cpu=372800
-\n#$ -pe parallel-onenode 6
+\n#$ -pe parallel-onenode 1
 \n#$ -S /bin/bash
 \n#$ -M jkodner@seas.upenn.edu
 \n#$ -m eas
