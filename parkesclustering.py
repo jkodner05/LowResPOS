@@ -11,6 +11,7 @@ from collections import defaultdict
 import cPickle as pickle
 
 from readers import *
+import agglomclustering as agglom
 
 SKIP_TAG = "SKIP"
 PUNCT_TAGS = set([])
@@ -25,6 +26,9 @@ def set_puncttags(corpus):
     global PUNCT_TAGS
     if corpus.lower() == "conll":
         PUNCT_TAGS = set(["_","x","mad","mid","pad"])
+
+def get_seedtag(word, seedowords):
+    return max(seedwords[word], key=seedwords[word].get)
 
 
 def read_corpusdirfiles(basedir, corpustype, maxtokens):
@@ -572,8 +576,9 @@ def plot_dendrogram(tree, title, outname, namelist, k, seedwords):
     def label_func(leafnum):
         word = namelist[leafnum]
         if word in seedwords:
+            tag = get_seedtag(word, seedwords)
 #            print "SEED", word
-            return "*** " + word
+            return tag + " *** " + word
         return word
 
     plt.figure(figsize=(int(0.25*k), int(0.2*k)))
@@ -703,13 +708,13 @@ def assign_POS(tree, namelist, seedwords, evaltagmap, prevassignments, prevconfi
         nodemembers[i].add(i)
         nodeconfidences[i] = 1.0
         if word in seedwords:
-            maxtag = max(seedwords[word], key=seedwords[word].get)
+            seedtag = get_seedtag(word, seedwords)
             #normedtags = {}
             #factor = sum(seedwords[word].values())
             #for tag, count in seedwords[word].iteritems():
             #    normedtags[tag] = float(count)/factor
             #nodetags[i] = normedtags
-            nodetags[i][maxtag] = 1
+            nodetags[i][seedtag] = 1
 
     #iterate through joins
     newnodebase = len(namelist)
@@ -955,16 +960,28 @@ def assign(mappedtags, words, k, distances, seedwords, evalmap, prevassignments,
         print "MULTI-to-1 TYPE ACCURACY:\tk=", k
 #        fileprefix = datafile.replace(".pickle","")
 
-        bothtree = make_tree(distances_topk, method)
+#        bothtree = make_tree(distances_topk, method)
+#        print bothtree
+#        print type(bothtree), type(bothtree[0,0])
+#        print bothtree.shape
+
+        avoidmixedlabels = True
+        seedtags = {word:get_seedtag(word,seedwords) for word in seedwords}
+        seedmap = agglom.make_seedmap(words_topk, seedtags)
+        bothtree = agglom.make_tree_implemented(distance.squareform(distances_topk), seedmap, avoidmixedlabels, method)
+#        print bothtree
+#        print type(bothtree), type(bothtree[0,0])
+#        print bothtree.shape
+        
+#        plot_dendrogram(bothtree, 'Right+Left Context Dendrogram', "both_dendrogram.png", words_topk, len(words_topk), seedwords)
+#        print "PLOTTED"
+#        exit()
 
         assignments, confidences = assign_POS(bothtree, words_topk, seedwords, evalmap, prevassignments, prevconfidences, distance.squareform(distances_topk))
 
         c, coph_dists = hierarchy.cophenet(bothtree, distances_topk)
         print "Cophenetic Correlation:", c
         evaluate_types(assignments, seedwords, mappedtags, evalmap)
-#        if k > 400:
-#            plot_dendrogram(bothtree, 'Right+Left Context Dendrogram', "both_dendrogram.png", words_topk, len(words_topk), seedwords)
-#            exit()
 
         return assignments, confidences, update_seedwords(seedwords, assignments, confidences)
 
@@ -1065,7 +1082,7 @@ if __name__ == "__main__":
         print "\nNo Classification of Remainder"
         evaluate_tokens(args.inputdir, args.corpus, assignments, evalmap, distmap, args.numtokens)
 
-        print "\nNGram Tagger"
+#        print "\nNGram Tagger"
 #        evaluate_tokens(args.inputdir, args.corpus, assignments, evalmap, distmap, outfile=args.datafile, seeds=originalseeds, ngram=True)
 
         print "\n\nBASELINES...\n"
